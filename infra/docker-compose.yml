@@ -1,0 +1,31 @@
+version: "3.9"
+services:
+  api:
+    build:
+      context: ../api
+      dockerfile: Dockerfile
+    container_name: lifemap_api
+    env_file:
+      - ../.env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../api:/app
+    command: ["/bin/bash", "/app/uvicorn_start.sh"]
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16-alpine
+    container_name: lifemap_db
+    environment:
+      POSTGRES_DB: ${DB_NAME:-lifemap}
+      POSTGRES_USER: ${DB_USER:-lifemap}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-lifemap_pw}
+    ports:
+      - "5432:5432"
+    volumes:
+      - lifemap_pg:/var/lib/postgresql/data
+
+volumes:
+  lifemap_pg:
