@@ -3,7 +3,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, Literal, List
 from .core.config import settings
-from .llm.provider import fake_generate_roadmap
+from .llm.provider import generate_roadmap_struct, revise_roadmap_struct
+from .llm.schema import validate_plan
 
 from sqlmodel import Session, select, func
 from .core.database import engine, User, Profile, Roadmap, Feedback
@@ -114,8 +115,9 @@ def generate_roadmap(payload: GenerateInput, authorization: Optional[str] = Head
             domain_json = getattr(profile, f"{payload.domain}_json", None)
         profile_data = json.loads(domain_json) if domain_json else {"hours_per_week": 8, "style": "balanced"}
 
-        # build plan via stub LLM
-        plan = fake_generate_roadmap(profile=profile_data, domain=payload.domain)
+        # build plan via LLM (with safe fallback) and validate
+        plan = generate_roadmap_struct(profile=profile_data, domain=payload.domain)
+        plan = validate_plan(plan).model_dump()
 
         # compute next version
         # compute next version safely (MAX can be NULL on first insert)
@@ -163,12 +165,11 @@ def revise_roadmap(payload: ReviseInput, authorization: Optional[str] = Header(N
         )
         session.add(fb)
 
-        # naive revision for Phase 2: regenerate using same profile (Phase 3 will use feedback-aware LLM)
         prev_plan = json.loads(prev.plan_json)
         domain = prev.domain
-
-        # create a slightly modified plan note to show change
-        prev_plan["notes"] = f"Revised due to feedback: {payload.feedback.signal_type}. " + (payload.feedback.notes or "")
+        # LLM-aware revision with validation (falls back locally if no API key)
+        new_plan = revise_roadmap_struct(plan=prev_plan, feedback=payload.feedback.model_dump())
+        new_plan = validate_plan(new_plan).model_dump()
 
         # version bump
         new_version = prev.version + 1
@@ -176,7 +177,7 @@ def revise_roadmap(payload: ReviseInput, authorization: Optional[str] = Header(N
             user_id=prev.user_id,
             domain=domain,
             version=new_version,
-            plan_json=json.dumps(prev_plan)
+            plan_json=json.dumps(new_plan)
         )
         session.add(new_rm)
         session.commit()

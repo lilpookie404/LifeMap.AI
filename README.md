@@ -119,6 +119,26 @@ lifemap/
  Documented endpoints with OpenAPI summaries
 
 --
+
+## 🔁 Phase 3 — LLM & Adaptive Roadmap
+
+### New
+- Prompt templates per domain (`app/llm/prompts.py`).
+- Strict JSON schema (`app/llm/schema.py`).
+- LLM wrapper with fallback (`app/llm/provider.py`).
+- Endpoints now validate plans before saving.
+
+### Configure LLM (optional)
+Add to `lifemap/.env` if you want real LLM output (fallback works without it):
+
+```
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o-mini
+```
+
+Restart the API container after changing env.
+
+--
  
 ## 🔜 Next Phase (Phase 1)
 Add PostgreSQL persistence
