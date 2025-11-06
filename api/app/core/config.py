@@ -3,7 +3,7 @@ import os
 
 class Settings(BaseModel):
     API_NAME: str = "LifeMap.AI"
-    API_VERSION: str = "0.2.0-phase2"
+    API_VERSION: str = "0.4.0-phase4"
     API_TOKEN: str = os.getenv("API_TOKEN", "dev123")
     ENV: str = os.getenv("ENV", "dev")
 

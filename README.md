@@ -1,17 +1,22 @@
-# 🧭 LifeMap.AI — Phase 2 : Backend MVP
+# 🧭 LifeMap.AI — Phase 4 : Personalization & Feedback Mechanism
 
 > Adaptive AI-powered roadmap generator for academics, career, and personal development.
 
 ---
 
-## 🚀 Project Goal (Phase 2)
-Produce and modify personalized roadmaps with simple bearer auth, core endpoints, and Postgres persistence.
+## 🚀 Project Goal (Phase 4)
+Personalized roadmaps with profile signal conditioning and feedback-driven adaptation. Full version history tracking.
 
-### 🎯 MVP outcome
-- POST `/profile:upsert` — store/update user profile domain JSON
-- POST `/roadmap:generate` — generate and persist a roadmap version
-- POST `/roadmap:revise` — append feedback and create a new version
-- GET `/roadmap/{id}` — fetch roadmap + feedback history
+### 🎯 Phase 4 Features
+- **Profile Conditioning**: Prompts adapt to `hours_per_week`, `style`, `target_role`/`target_exam`, `experience_level`
+- **Feedback-Driven Revision**: Few-shot examples guide LLM for `too_fast`, `too_easy`, `missing_topic`, `change_goal`
+- **Version History**: Track all roadmap versions showing adaptive evolution
+- **Core Endpoints**:
+  - POST `/profile:upsert` — store/update user profile domain JSON
+  - POST `/roadmap:generate` — generate personalized roadmap (profile-conditioned)
+  - POST `/roadmap:revise` — revise with feedback-driven prompts
+  - GET `/roadmap/{id}` — fetch roadmap + feedback history
+  - GET `/roadmap/{user_id}/{domain}/history` — get all versions for a user/domain
 
 ---
 
@@ -55,12 +60,12 @@ bash scripts/dev/migrate.sh
 ## 🧪 Smoke Tests (cURL)
 Replace the token if you changed `API_TOKEN`.
 
-Upsert profile:
+Upsert profile (with Phase 4 profile signals):
 
 ```
 curl -s -X POST http://localhost:8000/profile:upsert \
   -H "Authorization: Bearer dev123" -H "Content-Type: application/json" \
-  -d '{"name":"Test User","email":"test@example.com","domain":"career","data":{"hours_per_week":10,"style":"fast"}}'
+  -d '{"name":"Test User","email":"test@example.com","domain":"career","data":{"hours_per_week":10,"style":"fast","target_role":"Backend Engineer","experience_level":"intermediate"}}'
 ```
 
 Generate roadmap (adjust `user_id` accordingly):
@@ -86,12 +91,19 @@ curl -s -X GET http://localhost:8000/roadmap/1 \
   -H "Authorization: Bearer dev123"
 ```
 
+Get version history (Phase 4):
+
+```
+curl -s -X GET http://localhost:8000/roadmap/1/career/history \
+  -H "Authorization: Bearer dev123"
+```
+
 -- 
 
 ## 🧪 Example Endpoint
 ### Health
 GET /health
-→ {"status":"ok","env":"dev","version":"0.2.0-phase2"}
+→ {"status":"ok","env":"dev","version":"0.4.0-phase4"}
 
 --
 
@@ -112,11 +124,12 @@ lifemap/
 
 --
 
-## ✅ Phase 2 Deliverables
- Working FastAPI service with bearer auth
- Docker/OrbStack + Postgres (SQLModel)
- Roadmap persistence + feedback append
- Documented endpoints with OpenAPI summaries
+## ✅ Phase 4 Deliverables
+- Profile signal conditioning (hours, style, target_role/exam, experience_level)
+- Feedback-driven prompts with few-shot examples for each feedback type
+- Version history endpoint showing adaptive roadmap evolution
+- Enhanced prompts that adapt milestones/timeline based on profile
+- Full version tracking with incremental improvements
 
 --
 
@@ -140,10 +153,23 @@ Restart the API container after changing env.
 
 --
  
-## 🔜 Next Phase (Phase 1)
-Add PostgreSQL persistence
-Define DB schema (users, profiles, roadmaps, feedback)
-Replace fake roadmap with stored user data
+## 📊 Profile Signals (Phase 4)
+
+Profile data influences roadmap generation:
+- `hours_per_week`: Adjusts timeline pacing and milestone depth
+- `style`: `fast`/`balanced`/`slow` affects learning intensity
+- `target_role` (career): Aligns milestones toward specific job role
+- `target_exam` (academics): Structures milestones for exam prep
+- `experience_level`: `beginner`/`intermediate`/`advanced` adjusts complexity
+
+## 🔄 Feedback Types (Phase 4)
+
+Each feedback type triggers specific revision strategies:
+- `too_fast`: Extends timeline, adds buffer weeks, reduces intensity
+- `too_easy`: Adds advanced topics, harder projects, competitive elements
+- `missing_topic`: Creates new milestones, adds resources, adjusts timeline
+- `change_goal`: Pivots roadmap, reorders milestones, updates resources
+- `other`: Interprets notes and applies appropriate changes
 
 --
 

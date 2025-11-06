@@ -14,8 +14,8 @@ app = FastAPI(
     title=settings.API_NAME,
     version=settings.API_VERSION,
     description=(
-        "LifeMap.AI Phase 2 — Simple bearer auth plus endpoints to produce and revise "
-        "personalized roadmaps (profile upsert, generate, revise, fetch)."
+        "LifeMap.AI Phase 4 — Personalized roadmaps with profile conditioning and feedback-driven adaptation. "
+        "Endpoints: profile upsert, generate, revise, fetch, version history."
     ),
 )
 
@@ -167,8 +167,8 @@ def revise_roadmap(payload: ReviseInput, authorization: Optional[str] = Header(N
 
         prev_plan = json.loads(prev.plan_json)
         domain = prev.domain
-        # LLM-aware revision with validation (falls back locally if no API key)
-        new_plan = revise_roadmap_struct(plan=prev_plan, feedback=payload.feedback.model_dump())
+        # LLM-aware revision with feedback-driven prompts (falls back locally if no API key)
+        new_plan = revise_roadmap_struct(plan=prev_plan, feedback=payload.feedback.model_dump(), domain=domain)
         new_plan = validate_plan(new_plan).model_dump()
 
         # version bump
@@ -208,4 +208,49 @@ def get_roadmap(roadmap_id: int = Path(..., gt=0), authorization: Optional[str] 
             "created_at": rm.created_at.isoformat(),
             "plan": json.loads(rm.plan_json),
             "feedback": [{"id": x.id, "signal_type": x.signal_type, "notes": x.notes, "created_at": x.created_at.isoformat()} for x in fbs]
+        }
+
+# ---------------- Roadmap: Get Version History ----------------
+@app.get(
+    "/roadmap/{user_id}/{domain}/history",
+    summary="Get roadmap version history",
+    description="Returns all versions of a roadmap for a user and domain, showing adaptive evolution over time.",
+)
+def get_roadmap_history(
+    user_id: int = Path(..., gt=0),
+    domain: Domain = Path(...),
+    authorization: Optional[str] = Header(None)
+):
+    verify_token(authorization)
+
+    with Session(engine) as session:
+        user = session.get(User, user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        roadmaps = session.exec(
+            select(Roadmap)
+            .where((Roadmap.user_id == user_id) & (Roadmap.domain == domain))
+            .order_by(Roadmap.version)
+        ).all()
+
+        if not roadmaps:
+            return {"user_id": user_id, "domain": domain, "versions": []}
+
+        versions = []
+        for rm in roadmaps:
+            fbs = session.exec(select(Feedback).where(Feedback.roadmap_id == rm.id)).all()
+            versions.append({
+                "roadmap_id": rm.id,
+                "version": rm.version,
+                "created_at": rm.created_at.isoformat(),
+                "plan": json.loads(rm.plan_json),
+                "feedback_count": len(fbs),
+            })
+
+        return {
+            "user_id": user_id,
+            "domain": domain,
+            "total_versions": len(versions),
+            "versions": versions,
         }

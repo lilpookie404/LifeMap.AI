@@ -1,7 +1,7 @@
 from typing import Dict, Any
 import os
 import json
-from .prompts import DOMAIN_TO_PROMPT
+from .prompts import get_generate_prompt, get_revise_prompt
 from .schema import RoadmapPlan, validate_plan
 
 try:
@@ -44,7 +44,8 @@ def _call_openai_json(prompt: str, profile: Dict[str, Any], domain: str) -> Dict
     try:
         client = OpenAI(api_key=api_key)
         system_msg = prompt
-        user_msg = json.dumps({"profile": profile, "domain": domain})
+        # Include profile data in user message for additional context
+        user_msg = json.dumps({"profile": profile, "domain": domain}, indent=2)
 
         rsp = client.chat.completions.create(
             model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
@@ -69,32 +70,59 @@ def _call_openai_json(prompt: str, profile: Dict[str, Any], domain: str) -> Dict
 
 
 def generate_roadmap_struct(profile: Dict[str, Any], domain: str) -> Dict[str, Any]:
-    prompt = DOMAIN_TO_PROMPT.get(domain, DOMAIN_TO_PROMPT["career"])  # default to career style
+    """Generate roadmap with profile-conditioned prompts."""
+    prompt = get_generate_prompt(profile, domain)
     return _call_openai_json(prompt, profile, domain)
 
 
-def revise_roadmap_struct(plan: Dict[str, Any], feedback: Dict[str, Any]) -> Dict[str, Any]:
+def revise_roadmap_struct(plan: Dict[str, Any], feedback: Dict[str, Any], domain: str) -> Dict[str, Any]:
+    """Revise roadmap using feedback-driven prompts with few-shot examples."""
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key or OpenAI is None:
-        # Simple local revision: append note to last milestone and add a check-in
+        # Local revision with feedback-aware adjustments
         try:
             validated = validate_plan(plan).model_dump()
         except Exception:
-            validated = _fallback_plan({}, plan.get("domain", "career"))
-        notes = feedback.get("notes") or feedback.get("signal_type", "feedback")
-        if validated.get("milestones"):
-            validated["milestones"][0]["description"] = (
-                (validated["milestones"][0].get("description") or "") + f" Revised: {notes}"
-            ).strip()
-        validated.setdefault("check_ins", []).append({"week": len(validated.get("timeline", [])) + 1, "goal": "Review changes"})
+            validated = _fallback_plan({}, domain)
+        
+        signal_type = feedback.get("signal_type", "other")
+        notes = feedback.get("notes") or signal_type
+        
+        # Apply feedback-aware local edits
+        if signal_type == "too_fast" and validated.get("timeline"):
+            # Extend timeline by adding buffer weeks
+            last_week = max([t.get("week", 0) for t in validated.get("timeline", [])], default=0)
+            validated["timeline"].extend([
+                {"week": last_week + 1, "focus": "Buffer week for review"},
+                {"week": last_week + 2, "focus": "Additional practice"}
+            ])
+        elif signal_type == "too_easy" and validated.get("milestones"):
+            # Add challenge note to first milestone
+            if validated["milestones"]:
+                validated["milestones"][0]["description"] = (
+                    (validated["milestones"][0].get("description") or "") + 
+                    " [Enhanced: Increased difficulty per feedback]"
+                ).strip()
+        elif signal_type == "missing_topic" and notes:
+            # Add a new milestone for missing topic
+            new_id = f"m{len(validated.get('milestones', [])) + 1}"
+            validated.setdefault("milestones", []).append({
+                "id": new_id,
+                "title": f"Additional: {notes[:50]}",
+                "description": f"Added per user feedback: {notes}",
+                "resources": []
+            })
+        
+        validated.setdefault("check_ins", []).append({
+            "week": len(validated.get("timeline", [])) + 1,
+            "goal": f"Review changes from {signal_type} feedback"
+        })
         return validate_plan(validated).model_dump()
 
     try:
         client = OpenAI(api_key=api_key)
-        system_msg = (
-            "You revise plans. Given an existing JSON plan and feedback, return a NEW strict JSON plan with the same schema."
-        )
-        user_msg = json.dumps({"plan": plan, "feedback": feedback})
+        system_msg = get_revise_prompt(plan, feedback, domain)
+        user_msg = json.dumps({"plan": plan, "feedback": feedback}, indent=2)
         rsp = client.chat.completions.create(
             model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
             messages=[
