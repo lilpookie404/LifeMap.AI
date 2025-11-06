@@ -8,7 +8,7 @@ DATABASE_URL = (
     f"postgresql+psycopg://{settings.DB_USER}:{settings.DB_PASSWORD}"
     f"@{settings.DB_HOST}:{settings.DB_PORT}/{settings.DB_NAME}"
 )
-engine = create_engine(DATABASE_URL, echo=True)
+engine = create_engine(DATABASE_URL, echo=False)
 
 class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

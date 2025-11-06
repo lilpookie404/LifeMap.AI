@@ -1,18 +1,17 @@
-# 🧭 LifeMap.AI — Phase 0 : Foundations
+# 🧭 LifeMap.AI — Phase 2 : Backend MVP
 
 > Adaptive AI-powered roadmap generator for academics, career, and personal development.
 
 ---
 
-## 🚀 Project Goal (Phase 0)
-Lay the foundation for LifeMap.AI:
-- Basic **FastAPI backend**
-- Dockerized via **OrbStack**
-- Stub **LLM module** (`fake_generate_roadmap`)
-- API routes ready for expansion in Phase 1
+## 🚀 Project Goal (Phase 2)
+Produce and modify personalized roadmaps with simple bearer auth, core endpoints, and Postgres persistence.
 
 ### 🎯 MVP outcome
-Generate a fake but structured roadmap JSON for a chosen domain (`academics`, `career`, or `personal`).
+- POST `/profile:upsert` — store/update user profile domain JSON
+- POST `/roadmap:generate` — generate and persist a roadmap version
+- POST `/roadmap:revise` — append feedback and create a new version
+- GET `/roadmap/{id}` — fetch roadmap + feedback history
 
 ---
 
@@ -21,43 +20,78 @@ Generate a fake but structured roadmap JSON for a chosen domain (`academics`, `c
 |-------|------|
 | Backend | FastAPI (Python 3.11) |
 | Container | Docker (via OrbStack) |
-| Database | PostgreSQL (stubbed for Phase 1) |
+| Database | PostgreSQL (SQLModel) |
 | LLM Layer | LangChain placeholder |
 
 ---
 
-## ⚙️ Run Locally (without Docker)
-cd api
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-cd app
-uvicorn main:app --reload
+## ⚙️ Quick Start (Docker + Compose)
+1) Create an `.env` file at `lifemap/.env` with:
 
-Open 👉 http://127.0.0.1:8000/docs
+```
+API_TOKEN=dev123
+ENV=dev
 
--- 
+DB_HOST=db
+DB_PORT=5432
+DB_NAME=lifemap
+DB_USER=lifemap
+DB_PASSWORD=lifemap_pw
+```
 
-## 🐳 Run with Docker (OrbStack)
+2) Bring up the stack and initialize the database:
+
+```
 cd infra
-docker compose up --build
+docker compose up -d --build
+cd ..
+bash scripts/dev/migrate.sh
+```
 
-Then visit 👉 http://localhost:8000/docs
+3) Open 👉 http://localhost:8000/docs
 
 -- 
 
-## 🧪 Example Endpoints
+## 🧪 Smoke Tests (cURL)
+Replace the token if you changed `API_TOKEN`.
+
+Upsert profile:
+
+```
+curl -s -X POST http://localhost:8000/profile:upsert \
+  -H "Authorization: Bearer dev123" -H "Content-Type: application/json" \
+  -d '{"name":"Test User","email":"test@example.com","domain":"career","data":{"hours_per_week":10,"style":"fast"}}'
+```
+
+Generate roadmap (adjust `user_id` accordingly):
+
+```
+curl -s -X POST http://localhost:8000/roadmap:generate \
+  -H "Authorization: Bearer dev123" -H "Content-Type: application/json" \
+  -d '{"user_id":1,"domain":"career"}'
+```
+
+Revise roadmap (use returned `roadmap_id`):
+
+```
+curl -s -X POST http://localhost:8000/roadmap:revise \
+  -H "Authorization: Bearer dev123" -H "Content-Type: application/json" \
+  -d '{"roadmap_id":1,"feedback":{"signal_type":"missing_topic","notes":"Add system design"}}'
+```
+
+Get roadmap by id:
+
+```
+curl -s -X GET http://localhost:8000/roadmap/1 \
+  -H "Authorization: Bearer dev123"
+```
+
+-- 
+
+## 🧪 Example Endpoint
 ### Health
 GET /health
-→ {"status":"ok","env":"dev","version":"0.0.1-phase0"}
-
-### Generate Roadmap
-POST /roadmap:generate
-Authorization: Bearer dev123
-{
-  "domain": "career"
-}
-→ returns roadmap JSON with 5 milestones
+→ {"status":"ok","env":"dev","version":"0.2.0-phase2"}
 
 --
 
@@ -78,12 +112,11 @@ lifemap/
 
 --
 
-## ✅ Phase 0 Deliverables
- Working FastAPI service
- Docker/OrbStack integration
- Fake LLM roadmap generator
- Tested /health, /profile:upsert, /roadmap:generate
- Code pushed to GitHub
+## ✅ Phase 2 Deliverables
+ Working FastAPI service with bearer auth
+ Docker/OrbStack + Postgres (SQLModel)
+ Roadmap persistence + feedback append
+ Documented endpoints with OpenAPI summaries
 
 --
  
